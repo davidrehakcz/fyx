@@ -75,7 +75,7 @@ class _MailboxPageState extends State<MailboxPage> {
               },
             );
           },
-          dataProvider: (lastId) async {
+          dataProvider: (lastId, searchTerm) async {
             var result = await ApiController().loadMail(lastId: lastId);
             var mails = result.mails
                 .map((_mail) => Mail.fromJson(_mail, isCompact: MainRepository().settings.useCompactMode))

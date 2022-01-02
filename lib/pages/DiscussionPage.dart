@@ -139,7 +139,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   },
                 );
               },
-              dataProvider: (lastId) async {
+              dataProvider: (lastId, searchTerm) async {
                 var result;
                 if (lastId != null) {
                   // If we load next page(s)

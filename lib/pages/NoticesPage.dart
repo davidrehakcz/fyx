@@ -63,7 +63,7 @@ class _NoticesPageState extends State<NoticesPage> with WidgetsBindingObserver {
             )),
         child: PullToRefreshList(
             rebuild: _refreshData,
-            dataProvider: (lastId) async {
+            dataProvider: (lastId, searchTerm) async {
               var result = await ApiController().loadFeedNotices();
               var feed = result.data.map((NoticeItem item) {
                 var highlight = false;

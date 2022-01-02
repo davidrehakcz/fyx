@@ -47,6 +47,8 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
   DefaultView _defaultView = DefaultView.history;
   List<int> _toggledCategories = [];
   HomePageArguments? _arguments;
+  bool _historySearch = false;
+  bool _bookmarksSearch = false;
 
   @override
   void initState() {
@@ -198,10 +200,11 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
                 this.updateLatestView();
               });
             }
+
             setState(() => _pageIndex = index);
             this.refreshData(_pageIndex == HomePage.PAGE_MAIL ? ERefreshData.mail : ERefreshData.bookmarks);
           },
-          items: <BottomNavigationBarItem>[
+          items: [
             BottomNavigationBarItem(
               icon: Icon(_filterUnread ? Icons.bookmarks : Icons.bookmarks_outlined, size: 34),
             ),
@@ -215,6 +218,9 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
                     counter: notifications.newMails,
                     isVisible: notifications.newMails > 0),
               ),
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.more_horiz, size: 34),
             ),
           ],
         ),
@@ -236,13 +242,18 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
                                   onPressed: () => Navigator.of(context, rootNavigator: true).pushNamed('/notices')),
                               isVisible: notifications.newNotices > 0,
                               counter: notifications.newNotices)),
-                      trailing: GestureDetector(
-                        child: ca.Avatar(
-                          MainRepository().credentials!.avatar,
-                          size: 26
+                      trailing: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minSize: kMinInteractiveDimensionCupertino - 10,
+                        child: Icon(
+                          Icons.search,
+                          size: 30,
                         ),
-                        onTap: () {
-                          showCupertinoModalPopup(context: context, builder: (BuildContext context) => actionSheet(context));
+                        onPressed: () {
+                          setState(() {
+                            _historySearch = !_historySearch;
+                            _bookmarksSearch = !_bookmarksSearch;
+                          });
                         },
                       ),
                       middle: CupertinoSegmentedControl(
@@ -270,13 +281,16 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
                       // HISTORY PULL TO REFRESH
                       // -----
                       PullToRefreshList(
+                        hasSearch: _historySearch,
+                          searchLabel: 'Filtrovat historii',
                           rebuild: _refreshData['bookmarks'] ?? 0,
-                          dataProvider: (lastId) async {
+                          dataProvider: (lastId, searchTerm) async {
                             List<DiscussionListItem> withReplies = [];
                             var result = await ApiController().loadHistory();
                             var data = result.discussions
                                 .map((discussion) => BookmarkedDiscussion.fromJson(discussion))
                                 .where((discussion) => this._filterUnread ? discussion.unread > 0 : true)
+                                .where((discussion) => searchTerm.length > 0 ? discussion.name.contains(RegExp(searchTerm, caseSensitive: false)) : true)
                                 .map((discussion) => DiscussionListItem(discussion))
                                 .where((discussionListItem) {
                               if (discussionListItem.discussion.replies > 0) {
@@ -293,7 +307,9 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
                       // -----
                       PullToRefreshList(
                           rebuild: _refreshData['bookmarks'] ?? 0,
-                          dataProvider: (lastId) async {
+                          hasSearch: _bookmarksSearch,
+                          searchLabel: 'Hledat v klubech',
+                          dataProvider: (lastId, searchTerm) async {
                             var categories = [];
                             var result = await ApiController().loadBookmarks();
 

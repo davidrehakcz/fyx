@@ -16,13 +16,22 @@ import 'package:fyx/theme/T.dart';
 class PullToRefreshList extends StatefulWidget {
   final TDataProvider dataProvider;
   final Function? sliverListBuilder;
+  final Widget? pinnedWidget;
+  final bool hasSearch;
+  final String searchLabel;
   bool _disabled;
   bool _isInfinite;
   int _rebuild;
-  final Widget? pinnedWidget;
 
   PullToRefreshList(
-      {required this.dataProvider, isInfinite = false, int rebuild = 0, this.sliverListBuilder, bool disabled = false, this.pinnedWidget})
+      {required this.dataProvider,
+      isInfinite = false,
+      int rebuild = 0,
+      this.sliverListBuilder,
+      bool disabled = false,
+      this.pinnedWidget,
+      this.hasSearch = false,
+      this.searchLabel = 'Hledání'})
       : _isInfinite = isInfinite,
         _rebuild = rebuild,
         _disabled = disabled,
@@ -32,7 +41,7 @@ class PullToRefreshList extends StatefulWidget {
   _PullToRefreshListState createState() => _PullToRefreshListState();
 }
 
-class _PullToRefreshListState extends State<PullToRefreshList> {
+class _PullToRefreshListState extends State<PullToRefreshList> with TickerProviderStateMixin {
   ScrollController? _controller;
   bool _isLoading = true;
   bool _hasPulledDown = false;
@@ -42,6 +51,9 @@ class _PullToRefreshListState extends State<PullToRefreshList> {
   int? _prevLastId; // ID of last item loaded previously.
   var _slivers = <Widget>[];
   int _lastRebuild = 0;
+  String searchTerm = '';
+  late AnimationController searchAnimation;
+  TextEditingController searchController = TextEditingController();
 
   @override
   void setState(fn) {
@@ -53,6 +65,11 @@ class _PullToRefreshListState extends State<PullToRefreshList> {
   @override
   void initState() {
     super.initState();
+
+    searchAnimation = AnimationController(
+      duration: const Duration(milliseconds: 700),
+      vsync: this,
+    );
 
     () async {
       await Future.delayed(Duration.zero);
@@ -81,6 +98,16 @@ class _PullToRefreshListState extends State<PullToRefreshList> {
   }
 
   @override
+  void didUpdateWidget(PullToRefreshList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.hasSearch) {
+      searchAnimation.forward();
+    } else {
+      searchAnimation.reverse();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     SkinColors colors = Skin.of(context).theme.colors;
 
@@ -100,6 +127,7 @@ class _PullToRefreshListState extends State<PullToRefreshList> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
+            _searchWidget(context),
             SizedBox(),
             Text(
               L.GENERAL_EMPTY,
@@ -117,6 +145,7 @@ class _PullToRefreshListState extends State<PullToRefreshList> {
           Column(
             mainAxisSize: MainAxisSize.max,
             children: [
+              _searchWidget(context),
               Expanded(
                 child: NotificationListener<ScrollNotification>(
                   onNotification: (ScrollNotification scrollInfo) {
@@ -199,6 +228,34 @@ class _PullToRefreshListState extends State<PullToRefreshList> {
     throw Exception('Data in the PullToRefresh must be instance of Widget or Map{header, items}');
   }
 
+  Widget _searchWidget(BuildContext contenxt) {
+    SkinColors colors = Skin.of(context).theme.colors;
+
+    return SizeTransition(
+        sizeFactor: CurvedAnimation(
+          curve: Curves.ease,
+          parent: searchAnimation,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: CupertinoSearchTextField(
+            placeholder: widget.searchLabel,
+            controller: searchController,
+            onSubmitted: (term) {
+              searchTerm = term;
+              this.loadData();
+            },
+            onSuffixTap: () {
+              searchController.clear();
+              searchTerm = '';
+              this.loadData();
+            },
+            autocorrect: false,
+          ),
+          color: colors.barBackground,
+        ));
+  }
+
   loadData({bool append = false}) async {
     setState(() => _isLoading = true);
 
@@ -222,7 +279,7 @@ class _PullToRefreshListState extends State<PullToRefreshList> {
     }
 
     try {
-      _result = await widget.dataProvider(append ? _lastId : null);
+      _result = await widget.dataProvider(append ? _lastId : null, searchTerm);
       bool makeInactive = false;
 
       // If the ID of the last ID is same as the ID of currently loaded last ID
@@ -317,4 +374,4 @@ class DataProviderResult {
   DataProviderResult(this.data, {this.lastId});
 }
 
-typedef Future<DataProviderResult> TDataProvider(int? id);
+typedef Future<DataProviderResult> TDataProvider(int? id, String searchTerm);
