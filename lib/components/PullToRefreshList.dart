@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_sticky_header/flutter_sticky_header.dart';
-import 'package:fyx/theme/skin/SkinColors.dart';
-import 'package:fyx/theme/skin/Skin.dart';
-import 'package:sentry/sentry.dart';
 import 'package:fyx/theme/L.dart';
 import 'package:fyx/theme/T.dart';
+import 'package:fyx/theme/skin/Skin.dart';
+import 'package:fyx/theme/skin/SkinColors.dart';
+import 'package:sentry/sentry.dart';
 
 // ignore: must_be_immutable
 class PullToRefreshList extends StatefulWidget {
@@ -19,6 +19,8 @@ class PullToRefreshList extends StatefulWidget {
   final Widget? pinnedWidget;
   final bool hasSearch;
   final String searchLabel;
+  final String searchTerm;
+  Function? onSearch;
   bool _disabled;
   bool _isInfinite;
   int _rebuild;
@@ -31,7 +33,9 @@ class PullToRefreshList extends StatefulWidget {
       bool disabled = false,
       this.pinnedWidget,
       this.hasSearch = false,
-      this.searchLabel = 'Hledání'})
+      this.searchLabel = 'Hledání',
+      this.onSearch,
+      this.searchTerm = ''})
       : _isInfinite = isInfinite,
         _rebuild = rebuild,
         _disabled = disabled,
@@ -42,7 +46,6 @@ class PullToRefreshList extends StatefulWidget {
 }
 
 class _PullToRefreshListState extends State<PullToRefreshList> with TickerProviderStateMixin {
-  ScrollController? _controller;
   bool _isLoading = true;
   bool _hasPulledDown = false;
   bool _hasError = false;
@@ -50,7 +53,6 @@ class _PullToRefreshListState extends State<PullToRefreshList> with TickerProvid
   int? _lastId;
   int? _prevLastId; // ID of last item loaded previously.
   var _slivers = <Widget>[];
-  int _lastRebuild = 0;
   String searchTerm = '';
   late AnimationController searchAnimation;
   TextEditingController searchController = TextEditingController();
@@ -73,7 +75,6 @@ class _PullToRefreshListState extends State<PullToRefreshList> with TickerProvid
 
     () async {
       await Future.delayed(Duration.zero);
-      _controller = PrimaryScrollController.of(context);
 
       // Add the refresh control on first position
       _slivers.add(CupertinoSliverRefreshControl(
@@ -92,29 +93,35 @@ class _PullToRefreshListState extends State<PullToRefreshList> with TickerProvid
   }
 
   @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(PullToRefreshList oldWidget) {
-    super.didUpdateWidget(oldWidget);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.searchTerm.isNotEmpty) {
+      setState(() => searchTerm = widget.searchTerm);
+      searchController.text = widget.searchTerm;
+    }
     if (widget.hasSearch) {
-      searchAnimation.forward();
+      searchAnimation.forward(from: 1);
     } else {
       searchAnimation.reverse();
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    SkinColors colors = Skin.of(context).theme.colors;
-
-    if (widget._rebuild > _lastRebuild && !_isLoading) {
-      setState(() => _lastRebuild = widget._rebuild);
+  void didUpdateWidget(PullToRefreshList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.hasSearch) {
+      searchAnimation.forward(from: oldWidget.hasSearch ? 1 : 0);
+    } else {
+      searchAnimation.reverse();
+    }
+    if (widget._rebuild != oldWidget._rebuild && !_isLoading) {
       this.loadData();
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    SkinColors colors = Skin.of(context).theme.colors;
 
     if (_hasError) {
       return T.feedbackScreen(context, isLoading: _isLoading, onPress: loadData, label: L.GENERAL_REFRESH);
@@ -163,7 +170,7 @@ class _PullToRefreshListState extends State<PullToRefreshList> with TickerProvid
                   child: CustomScrollView(
                     physics: Platform.isIOS ? const AlwaysScrollableScrollPhysics() : const RefreshScrollPhysics(),
                     slivers: _slivers,
-                    controller: _controller,
+                    controller: PrimaryScrollController.of(context),
                   ),
                 ),
               ),
@@ -243,11 +250,13 @@ class _PullToRefreshListState extends State<PullToRefreshList> with TickerProvid
             controller: searchController,
             onSubmitted: (term) {
               searchTerm = term;
+              if (widget.onSearch != null) widget.onSearch!(term);
               this.loadData();
             },
             onSuffixTap: () {
               searchController.clear();
               searchTerm = '';
+              if (widget.onSearch != null) widget.onSearch!('');
               this.loadData();
             },
             autocorrect: false,
